@@ -1,14 +1,22 @@
 [package]
 name = "sx127x_lora"
-version = "0.3.1"
+version = "0.4.0"
 authors = ["Charles Wade <charles.wade@rockets.utoledo.edu>"]
 repository = "https://github.com/mr-glt/sx127x_lora"
 readme = "README.md"
 edition = "2018"
 license = "Apache-2.0"
 categories = ["embedded", "hardware-support", "no-std"]
-keywords = ["embedded-hal-driver","lora","sx1276","radio"]
+keywords = ["embedded-hal-driver","lora","sx1276","radio","rfm95"]
 description = "A platform-agnostic driver for Semtech SX1276/77/78/79 based boards."
+
+[dev-dependencies]
+linux-embedded-hal = "~0.3"
+cortex-m = "~0.7"
+cortex-m-rt = "~0.7"
+panic-semihosting = "~0.5"
+cortex-m-semihosting = "~0.3"
+stm32f4xx-hal = { version = "~0.10", features = [ "rt", "stm32f429" ] }
 
 [dependencies]
 embedded-hal = "~0.2"
