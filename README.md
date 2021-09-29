@@ -4,7 +4,7 @@
 
  A platform-agnostic driver for Semtech SX1276/77/78/79 based boards. It supports any device that
 implements the `embedded-hal` traits. Devices are connected over SPI and require an extra GPIO pin for
-RESET. This cate works with any Semtech based board including:
+RESET. This crate works with any Semtech based board including:
  * Modtronix inAir4, inAir9, and inAir9B
  * HopeRF RFM95W, RFM96W, and RFM98W
 # Examples
