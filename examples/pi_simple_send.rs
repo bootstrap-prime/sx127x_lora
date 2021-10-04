@@ -1,4 +1,3 @@
-#![feature(extern_crate_item_prelude)]
 extern crate linux_embedded_hal as hal;
 extern crate sx127x_lora;
 
@@ -32,7 +31,8 @@ fn main() {
     let mut lora = sx127x_lora::LoRa::new(spi, cs, reset, FREQUENCY, &mut Delay)
         .expect("Failed to communicate with radio module!");
 
-    lora.set_tx_power(17, 1); //Using PA_BOOST. See your board for correct pin.
+    lora.set_tx_power(17, 1) //Using PA_BOOST. See your board for correct pin.
+        .expect("Failed to set radio transmission power!");
 
     let message = b"Hello, world!";
 

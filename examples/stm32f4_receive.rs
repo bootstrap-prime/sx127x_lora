@@ -24,16 +24,16 @@ fn main() -> ! {
     let cp = cortex_m::Peripherals::take().unwrap();
     let p = pac::Peripherals::take().unwrap();
 
-    let mut rcc = p.RCC.constrain();
+    let rcc = p.RCC.constrain();
     let clocks = rcc
         .cfgr
         .sysclk(MegaHertz(64))
         .pclk1(MegaHertz(32))
         .freeze();
 
-    let mut gpioa = p.GPIOA.split();
-    let mut gpiod = p.GPIOD.split();
-    let mut gpiof = p.GPIOF.split();
+    let gpioa = p.GPIOA.split();
+    let gpiod = p.GPIOD.split();
+    let gpiof = p.GPIOF.split();
 
     let sck = gpioa.pa5.into_alternate();
     let miso = gpioa.pa6.into_alternate();
@@ -65,11 +65,11 @@ fn main() -> ! {
                 )
                 .unwrap();
                 let buffer = lora.read_packet().unwrap(); // Received buffer. NOTE: 255 bytes are always returned
-                hprint!("with Payload: ");
+                hprint!("with Payload: ").unwrap();
                 for i in 0..size {
                     hprint!("{}", buffer[i] as char).unwrap();
                 }
-                hprintln!();
+                hprintln!().unwrap();
             }
             Err(_) => hprintln!("Timeout").unwrap(),
         }

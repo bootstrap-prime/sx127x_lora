@@ -22,6 +22,11 @@ stm32f4xx-hal = { version = "~0.10", features = [ "rt", "stm32f429" ] }
 embedded-hal = "~0.2"
 bit_field = "~0.10"
 
+[[example]]
+name = "stm32f4_receive"
+path = "examples/stm32f4_receive.rs"
+test = false
+
 [features]
 version_0x09 = []
 default = []
