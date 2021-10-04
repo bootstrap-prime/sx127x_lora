@@ -6,14 +6,13 @@
 //! # sx127x_lora
 //!  A platform-agnostic driver for Semtech SX1276/77/78/79 based boards. It supports any device that
 //! implements the `embedded-hal` traits. Devices are connected over SPI and require an extra GPIO pin for
-//! RESET. This cate works with any Semtech based board including:
+//! RESET. This crate works with any Semtech based board including:
 //! * Modtronix inAir4, inAir9, and inAir9B
 //! * HopeRF RFM95W, RFM96W, and RFM98W
 //! # Examples
 //! ## Raspberry Pi Basic Send
 //! Utilizes a Raspberry Pi to send a message. The example utilizes the `linux_embedded_hal` crate.
 //! ```no_run
-//! #![feature(extern_crate_item_prelude)]
 //! extern crate sx127x_lora;
 //! extern crate linux_embedded_hal as hal;
 //!
@@ -21,12 +20,12 @@
 //! use hal::{Pin, Spidev};
 //! use hal::sysfs_gpio::Direction;
 //! use hal::Delay;
-
+//!
 //! const LORA_CS_PIN: u64 = 8;
 //! const LORA_RESET_PIN: u64 = 21;
 //! const FREQUENCY: i64 = 915;
 //!
-//! fn main(){
+//! fn main() {
 //!
 //!     let mut spi = Spidev::open("/dev/spidev0.0").unwrap();
 //!     let options = SpidevOptions::new()
@@ -45,7 +44,7 @@
 //!     reset.set_direction(Direction::Out).unwrap();
 //!
 //!     let mut lora = sx127x_lora::LoRa::new(
-//!         spi, cs, reset,  FREQUENCY, Delay)
+//!         spi, cs, reset,  FREQUENCY, &mut Delay)
 //!         .expect("Failed to communicate with radio module!");
 //!
 //!     lora.set_tx_power(17,1); //Using PA_BOOST. See your board for correct pin.
