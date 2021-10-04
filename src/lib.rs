@@ -148,7 +148,7 @@ use bit_field::BitField;
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;
-use embedded_hal::spi::{Mode, Phase, Polarity};
+use embedded_hal::spi::Mode;
 
 mod register;
 use self::register::PaConfig;
@@ -156,10 +156,9 @@ use self::register::Register;
 use self::register::IRQ;
 
 /// Provides the necessary SPI mode configuration for the radio
-pub const MODE: Mode = Mode {
-    phase: Phase::CaptureOnSecondTransition,
-    polarity: Polarity::IdleHigh,
-};
+/// Note that this may vary by device. Modules other than the RFM95
+/// module requires may require `embedded_hal::spi::MODE_3` instead.
+pub const MODE: Mode = embedded_hal::spi::MODE_0;
 
 /// Provides high-level access to Semtech SX1276/77/78/79 based boards connected to a Raspberry Pi
 pub struct LoRa<SPI, CS, RESET> {
