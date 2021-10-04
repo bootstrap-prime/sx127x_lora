@@ -237,30 +237,11 @@ where
     /// array and a payload size and returns the number of bytes sent if successful.
     pub fn transmit_payload_busy(
         &mut self,
-        buffer: [u8; 255],
-        payload_size: usize,
-    ) -> Result<usize, Error<E, CS::Error, RESET::Error>> {
-        if self.transmitting()? {
-            Err(Transmitting)
-        } else {
-            self.set_mode(RadioMode::Stdby)?;
-            if self.explicit_header {
-                self.set_explicit_header_mode()?;
-            } else {
-                self.set_implicit_header_mode()?;
-            }
-
-            self.write_register(Register::RegIrqFlags.addr(), 0)?;
-            self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
-            self.write_register(Register::RegPayloadLength.addr(), 0)?;
-            for byte in buffer.iter().take(payload_size) {
-                self.write_register(Register::RegFifo.addr(), *byte)?;
-            }
-            self.write_register(Register::RegPayloadLength.addr(), payload_size as u8)?;
-            self.set_mode(RadioMode::Tx)?;
-            while self.transmitting()? {}
-            Ok(payload_size)
-        }
+        payload: &[u8],
+    ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
+        self.transmit_payload(&payload)?;
+        while self.transmitting()? {}
+        Ok(())
     }
 
     pub fn set_dio0_tx_done(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
