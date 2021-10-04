@@ -668,6 +668,7 @@ where
         Ok(())
     }
 
+    /// Puts the radio in FSK mode.
     pub fn put_in_fsk_mode(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
         // Put in FSK mode
         let mut op_mode: u8 = 0x0;
@@ -680,6 +681,7 @@ where
         self.write_register(Register::RegOpMode as u8, op_mode)
     }
 
+    /// Sets the ramp-up time for FSK mode.
     pub fn set_fsk_pa_ramp(
         &mut self,
         modulation_shaping: FskDataModulationShaping,
