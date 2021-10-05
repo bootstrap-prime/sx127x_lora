@@ -7,13 +7,7 @@ extern crate stm32f4xx_hal as hal;
 extern crate sx127x_lora;
 
 use cortex_m_semihosting::*;
-use stm32f4xx_hal::{
-    delay::Delay,
-    pac,
-    spi::Spi,
-    prelude::*,
-    time::MegaHertz,
-};
+use stm32f4xx_hal::{delay::Delay, pac, prelude::*, spi::Spi, time::MegaHertz};
 
 use sx127x_lora::MODE;
 
@@ -25,11 +19,7 @@ fn main() -> ! {
     let p = pac::Peripherals::take().unwrap();
 
     let rcc = p.RCC.constrain();
-    let clocks = rcc
-        .cfgr
-        .sysclk(MegaHertz(64))
-        .pclk1(MegaHertz(32))
-        .freeze();
+    let clocks = rcc.cfgr.sysclk(MegaHertz(64)).pclk1(MegaHertz(32)).freeze();
 
     let gpioa = p.GPIOA.split();
     let gpiod = p.GPIOD.split();
@@ -43,16 +33,9 @@ fn main() -> ! {
 
     let mut delay = Delay::new(cp.SYST, &clocks);
 
-    let spi = Spi::new(
-        p.SPI1,
-        (sck, miso, mosi),
-        MODE,
-        MegaHertz(8),
-        clocks,
-    );
+    let spi = Spi::new(p.SPI1, (sck, miso, mosi), MODE, MegaHertz(8), clocks);
 
-    let mut lora =
-        sx127x_lora::LoRa::new(spi, cs, reset, FREQUENCY, &mut delay).unwrap();
+    let mut lora = sx127x_lora::LoRa::new(spi, cs, reset, FREQUENCY, &mut delay).unwrap();
 
     loop {
         let poll = lora.poll_irq(Some(30), &mut delay); //30 Second timeout
