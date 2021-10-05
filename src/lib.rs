@@ -189,6 +189,141 @@ const VERSION_CHECK: u8 = 0x12;
 #[cfg(feature = "version_0x09")]
 const VERSION_CHECK: u8 = 0x09;
 
+/// Interface declaration, to support a mock implementation of the Lora driver.
+pub trait LoraInterface {
+    type Error;
+
+    fn transmit_payload(&mut self, payload: &[u8]) -> Result<(), Self::Error>;
+    fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error>;
+
+    fn poll_irq(
+        &mut self,
+        timeout_ms: Option<i32>,
+        delay: &mut dyn DelayMs<u8>,
+    ) -> Result<usize, Self::Error>;
+    fn read_packet(&mut self) -> Result<[u8; 255], Self::Error>;
+
+    fn transmitting(&mut self) -> Result<bool, Self::Error>;
+    fn clear_irq(&mut self) -> Result<(), Self::Error>;
+}
+
+impl<SPI, CS, RESET, E> LoraInterface for LoRa<SPI, CS, RESET>
+where
+    SPI: Transfer<u8, Error = E> + Write<u8, Error = E>,
+    CS: OutputPin,
+    RESET: OutputPin,
+{
+    type Error = Error<E, CS::Error, RESET::Error>;
+
+    /// Transmits up to 255 bytes of data. To avoid the use of an allocator, this takes a fixed 255 u8
+    /// array and a payload size and returns the number of bytes sent if successful.
+    fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
+        self.transmit_payload(&payload)?;
+        while self.transmitting()? {}
+        Ok(())
+    }
+
+    fn transmit_payload(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
+        if self.transmitting()? {
+            Err(Transmitting)
+        } else {
+            self.set_mode(RadioMode::Stdby)?;
+            if self.explicit_header {
+                self.set_explicit_header_mode()?;
+            } else {
+                self.set_implicit_header_mode()?;
+            }
+
+            self.write_register(Register::RegIrqFlags.addr(), 0)?;
+            self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
+            self.write_register(Register::RegPayloadLength.addr(), 0)?;
+            for &byte in payload.iter().take(255) {
+                self.write_register(Register::RegFifo.addr(), byte)?;
+            }
+            self.write_register(
+                Register::RegPayloadLength.addr(),
+                payload.len().min(255) as u8,
+            )?;
+            self.set_mode(RadioMode::Tx)?;
+            Ok(())
+        }
+    }
+
+    /// Blocks the current thread, returning the size of a packet if one is received or an error is the
+    /// task timed out. The timeout can be supplied with None to make it poll indefinitely or
+    /// with `Some(timeout_in_milliseconds)`
+    fn poll_irq(
+        &mut self,
+        timeout_ms: Option<i32>,
+        delay: &mut dyn DelayMs<u8>,
+    ) -> Result<usize, Self::Error> {
+        self.set_mode(RadioMode::RxContinuous)?;
+        match timeout_ms {
+            Some(value) => {
+                let mut count = 0;
+                let packet_ready = loop {
+                    let packet_ready = self.read_register(Register::RegIrqFlags.addr())?.get_bit(6);
+                    if count >= value || packet_ready {
+                        break packet_ready;
+                    }
+                    count += 1;
+                    delay.delay_ms(1);
+                };
+                if packet_ready {
+                    self.clear_irq()?;
+                    Ok(self.read_register(Register::RegRxNbBytes.addr())? as usize)
+                } else {
+                    Err(Uninformative)
+                }
+            }
+            None => {
+                while !self.read_register(Register::RegIrqFlags.addr())?.get_bit(6) {
+                    delay.delay_ms(100);
+                }
+                self.clear_irq()?;
+                Ok(self.read_register(Register::RegRxNbBytes.addr())? as usize)
+            }
+        }
+    }
+
+    /// Returns the contents of the fifo as a fixed 255 u8 array. This should only be called is there is a
+    /// new packet ready to be read.
+    fn read_packet(&mut self) -> Result<[u8; 255], Self::Error> {
+        let mut buffer = [0 as u8; 255];
+        self.clear_irq()?;
+        let size = self.read_register(Register::RegRxNbBytes.addr())?;
+        let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr.addr())?;
+        self.write_register(Register::RegFifoAddrPtr.addr(), fifo_addr)?;
+        for i in 0..size {
+            let byte = self.read_register(Register::RegFifo.addr())?;
+            buffer[i as usize] = byte;
+        }
+        self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
+        Ok(buffer)
+    }
+
+    /// Returns true if the radio is currently transmitting a packet.
+    fn transmitting(&mut self) -> Result<bool, Self::Error> {
+        if (self.read_register(Register::RegOpMode.addr())? & RadioMode::Tx.addr())
+            == RadioMode::Tx.addr()
+        {
+            Ok(true)
+        } else {
+            if (self.read_register(Register::RegIrqFlags.addr())? & IRQ::IrqTxDoneMask.addr()) == 1
+            {
+                self.write_register(Register::RegIrqFlags.addr(), IRQ::IrqTxDoneMask.addr())?;
+            }
+            Ok(false)
+        }
+    }
+
+    /// Clears the radio's IRQ registers.
+    fn clear_irq(&mut self) -> Result<(), Self::Error> {
+        let irq_flags = self.read_register(Register::RegIrqFlags.addr())?;
+        self.write_register(Register::RegIrqFlags.addr(), irq_flags)
+    }
+}
+
 impl<SPI, CS, RESET, E> LoRa<SPI, CS, RESET>
 where
     SPI: Transfer<u8, Error = E> + Write<u8, Error = E>,
@@ -233,122 +368,8 @@ where
         }
     }
 
-    /// Transmits up to 255 bytes of data. To avoid the use of an allocator, this takes a fixed 255 u8
-    /// array and a payload size and returns the number of bytes sent if successful.
-    pub fn transmit_payload_busy(
-        &mut self,
-        payload: &[u8],
-    ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        self.transmit_payload(&payload)?;
-        while self.transmitting()? {}
-        Ok(())
-    }
-
     pub fn set_dio0_tx_done(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
         self.write_register(Register::RegDioMapping1.addr(), 0b01_00_00_00)
-    }
-
-    pub fn transmit_payload(
-        &mut self,
-        payload: &[u8],
-    ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        if self.transmitting()? {
-            Err(Transmitting)
-        } else {
-            self.set_mode(RadioMode::Stdby)?;
-            if self.explicit_header {
-                self.set_explicit_header_mode()?;
-            } else {
-                self.set_implicit_header_mode()?;
-            }
-
-            self.write_register(Register::RegIrqFlags.addr(), 0)?;
-            self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
-            self.write_register(Register::RegPayloadLength.addr(), 0)?;
-            for &byte in payload.iter().take(255) {
-                self.write_register(Register::RegFifo.addr(), byte)?;
-            }
-            self.write_register(
-                Register::RegPayloadLength.addr(),
-                payload.len().min(255) as u8,
-            )?;
-            self.set_mode(RadioMode::Tx)?;
-            Ok(())
-        }
-    }
-
-    /// Blocks the current thread, returning the size of a packet if one is received or an error is the
-    /// task timed out. The timeout can be supplied with None to make it poll indefinitely or
-    /// with `Some(timeout_in_mill_seconds)`
-    pub fn poll_irq(
-        &mut self,
-        timeout_ms: Option<i32>,
-        delay: &mut dyn DelayMs<u8>,
-    ) -> Result<usize, Error<E, CS::Error, RESET::Error>> {
-        self.set_mode(RadioMode::RxContinuous)?;
-        match timeout_ms {
-            Some(value) => {
-                let mut count = 0;
-                let packet_ready = loop {
-                    let packet_ready = self.read_register(Register::RegIrqFlags.addr())?.get_bit(6);
-                    if count >= value || packet_ready {
-                        break packet_ready;
-                    }
-                    count += 1;
-                    delay.delay_ms(1);
-                };
-                if packet_ready {
-                    self.clear_irq()?;
-                    Ok(self.read_register(Register::RegRxNbBytes.addr())? as usize)
-                } else {
-                    Err(Uninformative)
-                }
-            }
-            None => {
-                while !self.read_register(Register::RegIrqFlags.addr())?.get_bit(6) {
-                    delay.delay_ms(100);
-                }
-                self.clear_irq()?;
-                Ok(self.read_register(Register::RegRxNbBytes.addr())? as usize)
-            }
-        }
-    }
-
-    /// Returns the contents of the fifo as a fixed 255 u8 array. This should only be called is there is a
-    /// new packet ready to be read.
-    pub fn read_packet(&mut self) -> Result<[u8; 255], Error<E, CS::Error, RESET::Error>> {
-        let mut buffer = [0 as u8; 255];
-        self.clear_irq()?;
-        let size = self.read_register(Register::RegRxNbBytes.addr())?;
-        let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr.addr())?;
-        self.write_register(Register::RegFifoAddrPtr.addr(), fifo_addr)?;
-        for i in 0..size {
-            let byte = self.read_register(Register::RegFifo.addr())?;
-            buffer[i as usize] = byte;
-        }
-        self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
-        Ok(buffer)
-    }
-
-    /// Returns true if the radio is currently transmitting a packet.
-    pub fn transmitting(&mut self) -> Result<bool, Error<E, CS::Error, RESET::Error>> {
-        if (self.read_register(Register::RegOpMode.addr())? & RadioMode::Tx.addr())
-            == RadioMode::Tx.addr()
-        {
-            Ok(true)
-        } else {
-            if (self.read_register(Register::RegIrqFlags.addr())? & IRQ::IrqTxDoneMask.addr()) == 1
-            {
-                self.write_register(Register::RegIrqFlags.addr(), IRQ::IrqTxDoneMask.addr())?;
-            }
-            Ok(false)
-        }
-    }
-
-    /// Clears the radio's IRQ registers.
-    pub fn clear_irq(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        let irq_flags = self.read_register(Register::RegIrqFlags.addr())?;
-        self.write_register(Register::RegIrqFlags.addr(), irq_flags)
     }
 
     /// Sets the transmit power and pin. Levels can range from 0-14 when the output
@@ -676,6 +697,7 @@ where
         self.write_register(Register::RegPaRamp as u8, pa_ramp)
     }
 }
+
 /// Modes of the radio and their corresponding register values.
 #[derive(Clone, Copy)]
 pub enum RadioMode {
