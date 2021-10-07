@@ -216,14 +216,14 @@ where
 {
     type Error = Error<E, CS::Error, RESET::Error>;
 
-    /// Transmits up to 255 bytes of data. To avoid the use of an allocator, this takes a fixed 255 u8
-    /// array and a payload size and returns the number of bytes sent if successful.
+    /// Blocking version of transmit_payload().
     fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
         self.transmit_payload(&payload)?;
         while self.transmitting()? {}
         Ok(())
     }
 
+    /// Transmits up to 255 bytes of data. Takes a u8 slice of up to 255 elements. Returns () on success.
     fn transmit_payload(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
         if self.transmitting()? {
             Err(Transmitting)
