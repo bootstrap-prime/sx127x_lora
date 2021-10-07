@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(dead_code)]
 #![crate_type = "lib"]
 #![crate_name = "sx127x_lora"]
 
@@ -187,25 +188,37 @@ const VERSION_CHECK: u8 = 0x12;
 #[cfg(feature = "version_0x09")]
 const VERSION_CHECK: u8 = 0x09;
 
-/// Interface declaration, to support a mock implementation of the Lora driver.
-pub trait LoraInterface {
+/// embedded_radio traits, to provide implementations of various radio drivers compatible with embedded_hal.
+/// This mirrors the design of the std::sync::mpsc APIs, and can create mock implementations to support unit testing.
+/// This trait does not cover configuration, because of lack of knowledge on the designer's part. PRs welcome if
+/// a device agnostic way can be found to do that.
+pub trait EmbeddedRadio {
     type Error;
 
+    /// Attempts to send a value on this channel. Unsuccessful sends can result from hardware errors.
     fn transmit_payload(&mut self, payload: &[u8]) -> Result<(), Self::Error>;
+    /// Blocks until the payload has been sent from the transmitter. Unsuccessful sends can result from hardware errors.
     fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error>;
+    /// Will return a boolean value of whether or not the radio is still transmitting.
+    fn transmitting(&mut self) -> Result<bool, Self::Error>;
 
     fn poll_irq(
         &mut self,
         timeout_ms: Option<i32>,
         delay: &mut dyn DelayMs<u8>,
     ) -> Result<usize, Self::Error>;
-    fn read_packet(&mut self) -> Result<[u8; 255], Self::Error>;
 
-    fn transmitting(&mut self) -> Result<bool, Self::Error>;
-    fn clear_irq(&mut self) -> Result<(), Self::Error>;
+    /// Attempts to read a value on this channel. Unsuccessful reads result from a packet not being present.
+    /// Successful reads would be one where up to 255 bytes of data are received.
+    fn read_packet(&mut self) -> Result<[u8; 255], Self::Error>;
+    ///// Attempts to read a value on this channel. Unsuccessful reads can result from a hardware failure or the specified timeout passing.
+    ///// Successful reads would be ones where up to 255 bytes of data are received.
+    //fn read_packet_timeout(&mut self) -> Result<[u8; 255], Self::Error>;
+
 }
 
-impl<SPI, CS, RESET, E> LoraInterface for LoRa<SPI, CS, RESET>
+/// Implement embedded_radio traits
+impl<SPI, CS, RESET, E> EmbeddedRadio for LoRa<SPI, CS, RESET>
 where
     SPI: Transfer<u8, Error = E> + Write<u8, Error = E>,
     CS: OutputPin,
@@ -351,6 +364,17 @@ where
             Ok(sx127x)
         } else {
             Err(Error::VersionMismatch(version))
+        }
+    }
+
+    /// Check the radio's IRQ registers for a new packet, and only return it's size if one has arrived.
+    fn check_irq(&mut self) -> Result<Option<usize>, Error<E, CS::Error, RESET::Error>> {
+        let packet_ready = self.read_register(Register::IrqFlags)?.get_bit(6);
+
+        if packet_ready {
+            Ok(Some(self.read_register(Register::RxNbBytes)? as usize))
+        } else {
+            Ok(None)
         }
     }
 
@@ -701,9 +725,9 @@ pub enum RadioMode {
     RxSingle = 0x06,
 }
 
-impl RadioMode {
+impl AsAddr for RadioMode {
     /// Returns the address of the mode.
-    pub fn addr(self) -> u8 {
+    fn addr(self) -> u8 {
         self as u8
     }
 }
