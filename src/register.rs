@@ -2,41 +2,41 @@
 
 #[derive(Clone, Copy)]
 pub enum Register {
-    RegFifo = 0x00,
-    RegOpMode = 0x01,
-    RegFrfMsb = 0x06,
-    RegFrfMid = 0x07,
-    RegFrfLsb = 0x08,
-    RegPaConfig = 0x09,
-    RegPaRamp = 0x0a,
-    RegOcp = 0x0b,
-    RegLna = 0x0c,
-    RegFifoAddrPtr = 0x0d,
-    RegFifoTxBaseAddr = 0x0e,
-    RegFifoRxBaseAddr = 0x0f,
-    RegFifoRxCurrentAddr = 0x10,
-    RegIrqFlags = 0x12,
-    RegRxNbBytes = 0x13,
-    RegPktSnrValue = 0x19,
-    RegPktRssiValue = 0x1a,
-    RegModemConfig1 = 0x1d,
-    RegModemConfig2 = 0x1e,
-    RegPreambleMsb = 0x20,
-    RegPreambleLsb = 0x21,
-    RegPayloadLength = 0x22,
-    RegModemConfig3 = 0x26,
-    RegFreqErrorMsb = 0x28,
-    RegFreqErrorMid = 0x29,
-    RegFreqErrorLsb = 0x2a,
-    RegRssiWideband = 0x2c,
-    RegDetectionOptimize = 0x31,
-    RegInvertiq = 0x33,
-    RegDetectionThreshold = 0x37,
-    RegSyncWord = 0x39,
-    RegInvertiq2 = 0x3b,
-    RegDioMapping1 = 0x40,
-    RegVersion = 0x42,
-    RegPaDac = 0x4d,
+    Fifo = 0x00,
+    OpMode = 0x01,
+    FrfMsb = 0x06,
+    FrfMid = 0x07,
+    FrfLsb = 0x08,
+    PaConfig = 0x09,
+    PaRamp = 0x0a,
+    Ocp = 0x0b,
+    Lna = 0x0c,
+    FifoAddrPtr = 0x0d,
+    FifoTxBaseAddr = 0x0e,
+    FifoRxBaseAddr = 0x0f,
+    FifoRxCurrentAddr = 0x10,
+    IrqFlags = 0x12,
+    RxNbBytes = 0x13,
+    PktSnrValue = 0x19,
+    PktRssiValue = 0x1a,
+    ModemConfig1 = 0x1d,
+    ModemConfig2 = 0x1e,
+    PreambleMsb = 0x20,
+    PreambleLsb = 0x21,
+    PayloadLength = 0x22,
+    ModemConfig3 = 0x26,
+    FreqErrorMsb = 0x28,
+    FreqErrorMid = 0x29,
+    FreqErrorLsb = 0x2a,
+    RssiWideband = 0x2c,
+    DetectionOptimize = 0x31,
+    Invertiq = 0x33,
+    DetectionThreshold = 0x37,
+    SyncWord = 0x39,
+    Invertiq2 = 0x3b,
+    DioMapping1 = 0x40,
+    Version = 0x42,
+    PaDac = 0x4d,
 }
 #[derive(Clone, Copy)]
 pub enum PaConfig {
@@ -45,10 +45,10 @@ pub enum PaConfig {
 }
 
 #[derive(Clone, Copy)]
-pub enum IRQ {
-    IrqTxDoneMask = 0x08,
-    IrqPayloadCrcErrorMask = 0x20,
-    IrqRxDoneMask = 0x40,
+pub enum IRQMask {
+    TxDone = 0x08,
+    PayloadCrcError = 0x20,
+    RxDone = 0x40,
 }
 
 pub trait AsAddr {
@@ -67,7 +67,7 @@ impl AsAddr for PaConfig {
     }
 }
 
-impl AsAddr for IRQ {
+impl AsAddr for IRQMask {
     fn addr(self) -> u8 {
         self as u8
     }
