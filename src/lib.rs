@@ -154,6 +154,7 @@ mod register;
 use self::register::PaConfig;
 use self::register::Register;
 use self::register::IRQ;
+use self::register::AsAddr;
 
 /// Provides the necessary SPI mode configuration for the radio
 /// Note that this may vary by device. Modules other than the RFM95
@@ -234,14 +235,14 @@ where
                 self.set_implicit_header_mode()?;
             }
 
-            self.write_register(Register::RegIrqFlags.addr(), 0)?;
-            self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
-            self.write_register(Register::RegPayloadLength.addr(), 0)?;
+            self.write_register(Register::RegIrqFlags, 0)?;
+            self.write_register(Register::RegFifoAddrPtr, 0)?;
+            self.write_register(Register::RegPayloadLength, 0)?;
             for &byte in payload.iter().take(255) {
-                self.write_register(Register::RegFifo.addr(), byte)?;
+                self.write_register(Register::RegFifo, byte)?;
             }
             self.write_register(
-                Register::RegPayloadLength.addr(),
+                Register::RegPayloadLength,
                 payload.len().min(255) as u8,
             )?;
             self.set_mode(RadioMode::Tx)?;
@@ -262,7 +263,7 @@ where
             Some(value) => {
                 let mut count = 0;
                 let packet_ready = loop {
-                    let packet_ready = self.read_register(Register::RegIrqFlags.addr())?.get_bit(6);
+                    let packet_ready = self.read_register(Register::RegIrqFlags)?.get_bit(6);
                     if count >= value || packet_ready {
                         break packet_ready;
                     }
@@ -271,17 +272,17 @@ where
                 };
                 if packet_ready {
                     self.clear_irq()?;
-                    Ok(self.read_register(Register::RegRxNbBytes.addr())? as usize)
+                    Ok(self.read_register(Register::RegRxNbBytes)? as usize)
                 } else {
                     Err(Uninformative)
                 }
             }
             None => {
-                while !self.read_register(Register::RegIrqFlags.addr())?.get_bit(6) {
+                while !self.read_register(Register::RegIrqFlags)?.get_bit(6) {
                     delay.delay_ms(100);
                 }
                 self.clear_irq()?;
-                Ok(self.read_register(Register::RegRxNbBytes.addr())? as usize)
+                Ok(self.read_register(Register::RegRxNbBytes)? as usize)
             }
         }
     }
@@ -291,27 +292,27 @@ where
     fn read_packet(&mut self) -> Result<[u8; 255], Self::Error> {
         let mut buffer = [0 as u8; 255];
         self.clear_irq()?;
-        let size = self.read_register(Register::RegRxNbBytes.addr())?;
-        let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr.addr())?;
-        self.write_register(Register::RegFifoAddrPtr.addr(), fifo_addr)?;
+        let size = self.read_register(Register::RegRxNbBytes)?;
+        let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr)?;
+        self.write_register(Register::RegFifoAddrPtr, fifo_addr)?;
         for i in 0..size {
-            let byte = self.read_register(Register::RegFifo.addr())?;
+            let byte = self.read_register(Register::RegFifo)?;
             buffer[i as usize] = byte;
         }
-        self.write_register(Register::RegFifoAddrPtr.addr(), 0)?;
+        self.write_register(Register::RegFifoAddrPtr, 0)?;
         Ok(buffer)
     }
 
     /// Returns true if the radio is currently transmitting a packet.
     fn transmitting(&mut self) -> Result<bool, Self::Error> {
-        if (self.read_register(Register::RegOpMode.addr())? & RadioMode::Tx.addr())
+        if (self.read_register(Register::RegOpMode)? & RadioMode::Tx.addr())
             == RadioMode::Tx.addr()
         {
             Ok(true)
         } else {
-            if (self.read_register(Register::RegIrqFlags.addr())? & IRQ::IrqTxDoneMask.addr()) == 1
+            if (self.read_register(Register::RegIrqFlags)? & IRQ::IrqTxDoneMask.addr()) == 1
             {
-                self.write_register(Register::RegIrqFlags.addr(), IRQ::IrqTxDoneMask.addr())?;
+                self.write_register(Register::RegIrqFlags, IRQ::IrqTxDoneMask.addr())?;
             }
             Ok(false)
         }
@@ -319,8 +320,8 @@ where
 
     /// Clears the radio's IRQ registers.
     fn clear_irq(&mut self) -> Result<(), Self::Error> {
-        let irq_flags = self.read_register(Register::RegIrqFlags.addr())?;
-        self.write_register(Register::RegIrqFlags.addr(), irq_flags)
+        let irq_flags = self.read_register(Register::RegIrqFlags)?;
+        self.write_register(Register::RegIrqFlags, irq_flags)
     }
 }
 
@@ -351,15 +352,15 @@ where
         delay.delay_ms(10);
         sx127x.reset.set_high().map_err(Reset)?;
         delay.delay_ms(10);
-        let version = sx127x.read_register(Register::RegVersion.addr())?;
+        let version = sx127x.read_register(Register::RegVersion)?;
         if version == VERSION_CHECK {
             sx127x.set_mode(RadioMode::Sleep)?;
             sx127x.set_frequency(frequency)?;
-            sx127x.write_register(Register::RegFifoTxBaseAddr.addr(), 0)?;
-            sx127x.write_register(Register::RegFifoRxBaseAddr.addr(), 0)?;
-            let lna = sx127x.read_register(Register::RegLna.addr())?;
-            sx127x.write_register(Register::RegLna.addr(), lna | 0x03)?;
-            sx127x.write_register(Register::RegModemConfig3.addr(), 0x04)?;
+            sx127x.write_register(Register::RegFifoTxBaseAddr, 0)?;
+            sx127x.write_register(Register::RegFifoRxBaseAddr, 0)?;
+            let lna = sx127x.read_register(Register::RegLna)?;
+            sx127x.write_register(Register::RegLna, lna | 0x03)?;
+            sx127x.write_register(Register::RegModemConfig3, 0x04)?;
             sx127x.set_mode(RadioMode::Stdby)?;
             sx127x.cs.set_high().map_err(CS)?;
             Ok(sx127x)
@@ -369,7 +370,7 @@ where
     }
 
     pub fn set_dio0_tx_done(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        self.write_register(Register::RegDioMapping1.addr(), 0b01_00_00_00)
+        self.write_register(Register::RegDioMapping1, 0b01_00_00_00)
     }
 
     /// Sets the transmit power and pin. Levels can range from 0-14 when the output
@@ -387,7 +388,7 @@ where
             } else if level > 14 {
                 level = 14;
             }
-            self.write_register(Register::RegPaConfig.addr(), (0x70 | level) as u8)
+            self.write_register(Register::RegPaConfig, (0x70 | level) as u8)
         } else {
             // PA BOOST
             if level > 17 {
@@ -398,19 +399,19 @@ where
                 level -= 3;
 
                 // High Power +20 dBm Operation (Semtech SX1276/77/78/79 5.4.3.)
-                self.write_register(Register::RegPaDac.addr(), 0x87)?;
+                self.write_register(Register::RegPaDac, 0x87)?;
                 self.set_ocp(140)?;
             } else {
                 if level < 2 {
                     level = 2;
                 }
                 //Default value PA_HF/LF or +17dBm
-                self.write_register(Register::RegPaDac.addr(), 0x84)?;
+                self.write_register(Register::RegPaDac, 0x84)?;
                 self.set_ocp(100)?;
             }
             level -= 2;
             self.write_register(
-                Register::RegPaConfig.addr(),
+                Register::RegPaConfig,
                 PaConfig::PaBoost.addr() | level as u8,
             )
         }
@@ -425,7 +426,7 @@ where
         } else if ma <= 240 {
             ocp_trim = (ma + 30) / 10;
         }
-        self.write_register(Register::RegOcp.addr(), 0x20 | (0x1F & ocp_trim))
+        self.write_register(Register::RegOcp, 0x20 | (0x1F & ocp_trim))
     }
 
     /// Sets the state of the radio. Default mode after initiation is `Standby`.
@@ -436,7 +437,7 @@ where
             self.set_implicit_header_mode()?;
         }
         self.write_register(
-            Register::RegOpMode.addr(),
+            Register::RegOpMode,
             RadioMode::LongRangeMode.addr() | mode.addr(),
         )?;
 
@@ -453,25 +454,25 @@ where
         let frf = (freq * (base << 19)) / 32;
         // write registers
         self.write_register(
-            Register::RegFrfMsb.addr(),
+            Register::RegFrfMsb,
             ((frf & 0x00FF_0000) >> 16) as u8,
         )?;
-        self.write_register(Register::RegFrfMid.addr(), ((frf & 0x0000_FF00) >> 8) as u8)?;
-        self.write_register(Register::RegFrfLsb.addr(), (frf & 0x0000_00FF) as u8)
+        self.write_register(Register::RegFrfMid, ((frf & 0x0000_FF00) >> 8) as u8)?;
+        self.write_register(Register::RegFrfLsb, (frf & 0x0000_00FF) as u8)
     }
 
     /// Sets the radio to use an explicit header. Default state is `ON`.
     fn set_explicit_header_mode(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        let reg_modem_config_1 = self.read_register(Register::RegModemConfig1.addr())?;
-        self.write_register(Register::RegModemConfig1.addr(), reg_modem_config_1 & 0xfe)?;
+        let reg_modem_config_1 = self.read_register(Register::RegModemConfig1)?;
+        self.write_register(Register::RegModemConfig1, reg_modem_config_1 & 0xfe)?;
         self.explicit_header = true;
         Ok(())
     }
 
     /// Sets the radio to use an implicit header. Default state is `OFF`.
     fn set_implicit_header_mode(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        let reg_modem_config_1 = self.read_register(Register::RegModemConfig1.addr())?;
-        self.write_register(Register::RegModemConfig1.addr(), reg_modem_config_1 & 0x01)?;
+        let reg_modem_config_1 = self.read_register(Register::RegModemConfig1)?;
+        self.write_register(Register::RegModemConfig1, reg_modem_config_1 & 0x01)?;
         self.explicit_header = false;
         Ok(())
     }
@@ -490,15 +491,15 @@ where
         }
 
         if sf == 6 {
-            self.write_register(Register::RegDetectionOptimize.addr(), 0xc5)?;
-            self.write_register(Register::RegDetectionThreshold.addr(), 0x0c)?;
+            self.write_register(Register::RegDetectionOptimize, 0xc5)?;
+            self.write_register(Register::RegDetectionThreshold, 0x0c)?;
         } else {
-            self.write_register(Register::RegDetectionOptimize.addr(), 0xc3)?;
-            self.write_register(Register::RegDetectionThreshold.addr(), 0x0a)?;
+            self.write_register(Register::RegDetectionOptimize, 0xc3)?;
+            self.write_register(Register::RegDetectionThreshold, 0x0a)?;
         }
-        let modem_config_2 = self.read_register(Register::RegModemConfig2.addr())?;
+        let modem_config_2 = self.read_register(Register::RegModemConfig2)?;
         self.write_register(
-            Register::RegModemConfig2.addr(),
+            Register::RegModemConfig2,
             (modem_config_2 & 0x0f) | ((sf << 4) & 0xf0),
         )?;
         self.set_ldo_flag()?;
@@ -524,9 +525,9 @@ where
             250_000 => 8,
             _ => 9,
         };
-        let modem_config_1 = self.read_register(Register::RegModemConfig1.addr())?;
+        let modem_config_1 = self.read_register(Register::RegModemConfig1)?;
         self.write_register(
-            Register::RegModemConfig1.addr(),
+            Register::RegModemConfig1,
             (modem_config_1 & 0x0f) | ((bw << 4) as u8),
         )?;
         self.set_ldo_flag()?;
@@ -546,9 +547,9 @@ where
             denominator = 8;
         }
         let cr = denominator - 4;
-        let modem_config_1 = self.read_register(Register::RegModemConfig1.addr())?;
+        let modem_config_1 = self.read_register(Register::RegModemConfig1)?;
         self.write_register(
-            Register::RegModemConfig1.addr(),
+            Register::RegModemConfig1,
             (modem_config_1 & 0xf1) | (cr << 1),
         )
     }
@@ -559,39 +560,39 @@ where
         &mut self,
         length: i64,
     ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        self.write_register(Register::RegPreambleMsb.addr(), (length >> 8) as u8)?;
-        self.write_register(Register::RegPreambleLsb.addr(), length as u8)
+        self.write_register(Register::RegPreambleMsb, (length >> 8) as u8)?;
+        self.write_register(Register::RegPreambleLsb, length as u8)
     }
 
     /// Enables are disables the radio's CRC check. Default value is `false`.
     pub fn set_crc(&mut self, value: bool) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        let modem_config_2 = self.read_register(Register::RegModemConfig2.addr())?;
+        let modem_config_2 = self.read_register(Register::RegModemConfig2)?;
         if value {
-            self.write_register(Register::RegModemConfig2.addr(), modem_config_2 | 0x04)
+            self.write_register(Register::RegModemConfig2, modem_config_2 | 0x04)
         } else {
-            self.write_register(Register::RegModemConfig2.addr(), modem_config_2 & 0xfb)
+            self.write_register(Register::RegModemConfig2, modem_config_2 & 0xfb)
         }
     }
 
     /// Inverts the radio's IQ signals. Default value is `false`.
     pub fn set_invert_iq(&mut self, value: bool) -> Result<(), Error<E, CS::Error, RESET::Error>> {
         if value {
-            self.write_register(Register::RegInvertiq.addr(), 0x66)?;
-            self.write_register(Register::RegInvertiq2.addr(), 0x19)
+            self.write_register(Register::RegInvertiq, 0x66)?;
+            self.write_register(Register::RegInvertiq2, 0x19)
         } else {
-            self.write_register(Register::RegInvertiq.addr(), 0x27)?;
-            self.write_register(Register::RegInvertiq2.addr(), 0x1d)
+            self.write_register(Register::RegInvertiq, 0x27)?;
+            self.write_register(Register::RegInvertiq2, 0x1d)
         }
     }
 
     /// Returns the spreading factor of the radio.
     pub fn get_spreading_factor(&mut self) -> Result<u8, Error<E, CS::Error, RESET::Error>> {
-        Ok(self.read_register(Register::RegModemConfig2.addr())? >> 4)
+        Ok(self.read_register(Register::RegModemConfig2)? >> 4)
     }
 
     /// Returns the signal bandwidth of the radio.
     pub fn get_signal_bandwidth(&mut self) -> Result<i64, Error<E, CS::Error, RESET::Error>> {
-        let bw = self.read_register(Register::RegModemConfig1.addr())? >> 4;
+        let bw = self.read_register(Register::RegModemConfig1)? >> 4;
         let bw = match bw {
             0 => 7_800,
             1 => 10_400,
@@ -610,24 +611,24 @@ where
 
     /// Returns the RSSI of the last received packet.
     pub fn get_packet_rssi(&mut self) -> Result<i32, Error<E, CS::Error, RESET::Error>> {
-        Ok(i32::from(self.read_register(Register::RegPktRssiValue.addr())?) - 157)
+        Ok(i32::from(self.read_register(Register::RegPktRssiValue)?) - 157)
     }
 
     /// Returns the signal to noise radio of the the last received packet.
     pub fn get_packet_snr(&mut self) -> Result<f64, Error<E, CS::Error, RESET::Error>> {
         Ok(f64::from(
-            self.read_register(Register::RegPktSnrValue.addr())?,
+            self.read_register(Register::RegPktSnrValue)?,
         ))
     }
 
     /// Returns the frequency error of the last received packet in Hz.
     pub fn get_packet_frequency_error(&mut self) -> Result<i64, Error<E, CS::Error, RESET::Error>> {
         let mut freq_error: i32 = 0;
-        freq_error = i32::from(self.read_register(Register::RegFreqErrorMsb.addr())? & 0x7);
+        freq_error = i32::from(self.read_register(Register::RegFreqErrorMsb)? & 0x7);
         freq_error <<= 8i64;
-        freq_error += i32::from(self.read_register(Register::RegFreqErrorMid.addr())?);
+        freq_error += i32::from(self.read_register(Register::RegFreqErrorMid)?);
         freq_error <<= 8i64;
-        freq_error += i32::from(self.read_register(Register::RegFreqErrorLsb.addr())?);
+        freq_error += i32::from(self.read_register(Register::RegFreqErrorLsb)?);
 
         let f_xtal = 32_000_000; // FXOSC: crystal oscillator (XTAL) frequency (2.5. Chip Specification, p. 14)
         let f_error = ((f64::from(freq_error) * (1i64 << 24) as f64) / f64::from(f_xtal))
@@ -643,12 +644,14 @@ where
         // Section 4.1.1.6
         let ldo_on = symbol_duration > 16;
 
-        let mut config_3 = self.read_register(Register::RegModemConfig3.addr())?;
+        let mut config_3 = self.read_register(Register::RegModemConfig3)?;
         config_3.set_bit(3, ldo_on);
-        self.write_register(Register::RegModemConfig3.addr(), config_3)
+        self.write_register(Register::RegModemConfig3, config_3)
     }
 
-    fn read_register(&mut self, reg: u8) -> Result<u8, Error<E, CS::Error, RESET::Error>> {
+    fn read_register(&mut self, reg: Register) -> Result<u8, Error<E, CS::Error, RESET::Error>>
+    {
+        let reg = reg.addr();
         self.cs.set_low().map_err(CS)?;
 
         let mut buffer = [reg & 0x7f, 0];
@@ -659,9 +662,11 @@ where
 
     fn write_register(
         &mut self,
-        reg: u8,
+        reg: Register,
         byte: u8,
-    ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
+    ) -> Result<(), Error<E, CS::Error, RESET::Error>>
+    {
+        let reg = reg.addr();
         self.cs.set_low().map_err(CS)?;
 
         let buffer = [reg | 0x80, byte];
@@ -680,7 +685,7 @@ where
             .set_bit(3, false) //Low freq registers
             .set_bits(0..2, 0b011); // Mode
 
-        self.write_register(Register::RegOpMode as u8, op_mode)
+        self.write_register(Register::RegOpMode, op_mode)
     }
 
     /// Sets the ramp-up time for FSK mode.
@@ -694,7 +699,7 @@ where
             .set_bits(5..6, modulation_shaping as u8)
             .set_bits(0..3, ramp as u8);
 
-        self.write_register(Register::RegPaRamp as u8, pa_ramp)
+        self.write_register(Register::RegPaRamp, pa_ramp)
     }
 }
 

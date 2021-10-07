@@ -51,20 +51,24 @@ pub enum IRQ {
     IrqRxDoneMask = 0x40,
 }
 
-impl Register {
-    pub fn addr(self) -> u8 {
+pub trait AsAddr {
+    fn addr(self) -> u8;
+}
+
+impl AsAddr for Register {
+    fn addr(self) -> u8 {
         self as u8
     }
 }
 
-impl PaConfig {
-    pub fn addr(self) -> u8 {
+impl AsAddr for PaConfig {
+    fn addr(self) -> u8 {
         self as u8
     }
 }
 
-impl IRQ {
-    pub fn addr(self) -> u8 {
+impl AsAddr for IRQ {
+    fn addr(self) -> u8 {
         self as u8
     }
 }
