@@ -373,23 +373,19 @@ where
     /// Default value is `17`.
     pub fn set_tx_power(
         &mut self,
-        mut level: i32,
+        level: i32,
         output_pin: u8,
     ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
         if PaConfig::PaOutputRfoPin.addr() == output_pin {
             // RFO
-            if level < 0 {
-                level = 0;
-            } else if level > 14 {
-                level = 14;
-            }
-            self.write_register(Register::PaConfig, (0x70 | level) as u8)
+            let level = level.clamp(0, 14);
+
+            self.write_register(Register::PaConfig, (0x70 | level) as u8)?;
         } else {
             // PA BOOST
+            let mut level = level.clamp(2, 20);
+
             if level > 17 {
-                if level > 20 {
-                    level = 20;
-                }
                 // subtract 3 from level, so 18 - 20 maps to 15 - 17
                 level -= 3;
 
@@ -397,9 +393,6 @@ where
                 self.write_register(Register::PaDac, 0x87)?;
                 self.set_ocp(140)?;
             } else {
-                if level < 2 {
-                    level = 2;
-                }
                 //Default value PA_HF/LF or +17dBm
                 self.write_register(Register::PaDac, 0x84)?;
                 self.set_ocp(100)?;
@@ -477,13 +470,9 @@ where
     /// and receive packets. Default value is `7`.
     pub fn set_spreading_factor(
         &mut self,
-        mut sf: u8,
+        sf: u8,
     ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        if sf < 6 {
-            sf = 6;
-        } else if sf > 12 {
-            sf = 12;
-        }
+        let sf = sf.clamp(6, 12);
 
         if sf == 6 {
             self.write_register(Register::DetectionOptimize, 0xc5)?;
@@ -534,13 +523,10 @@ where
     /// Default value is `5`.
     pub fn set_coding_rate_4(
         &mut self,
-        mut denominator: u8,
+        denominator: u8,
     ) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        if denominator < 5 {
-            denominator = 5;
-        } else if denominator > 8 {
-            denominator = 8;
-        }
+        let denominator = denominator.clamp(5, 8);
+
         let cr = denominator - 4;
         let modem_config_1 = self.read_register(Register::ModemConfig1)?;
         self.write_register(Register::ModemConfig1, (modem_config_1 & 0xf1) | (cr << 1))?;
