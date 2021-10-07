@@ -1,4 +1,3 @@
-#![allow(unused_assignments)]
 #![no_std]
 #![crate_type = "lib"]
 #![crate_name = "sx127x_lora"]
@@ -218,7 +217,7 @@ where
 
     /// Blocking version of transmit_payload().
     fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
-        self.transmit_payload(&payload)?;
+        self.transmit_payload(payload)?;
         while self.transmitting()? {}
         Ok(())
     }
@@ -290,7 +289,7 @@ where
     /// Returns the contents of the fifo as a fixed 255 u8 array. This should only be called is there is a
     /// new packet ready to be read.
     fn read_packet(&mut self) -> Result<[u8; 255], Self::Error> {
-        let mut buffer = [0 as u8; 255];
+        let mut buffer = [0; 255];
         self.clear_irq()?;
         let size = self.read_register(Register::RegRxNbBytes)?;
         let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr)?;
@@ -623,11 +622,11 @@ where
 
     /// Returns the frequency error of the last received packet in Hz.
     pub fn get_packet_frequency_error(&mut self) -> Result<i64, Error<E, CS::Error, RESET::Error>> {
-        let mut freq_error: i32 = 0;
+        let mut freq_error: i32;
         freq_error = i32::from(self.read_register(Register::RegFreqErrorMsb)? & 0x7);
-        freq_error <<= 8i64;
+        freq_error <<= 8_i64;
         freq_error += i32::from(self.read_register(Register::RegFreqErrorMid)?);
-        freq_error <<= 8i64;
+        freq_error <<= 8_i64;
         freq_error += i32::from(self.read_register(Register::RegFreqErrorLsb)?);
 
         let f_xtal = 32_000_000; // FXOSC: crystal oscillator (XTAL) frequency (2.5. Chip Specification, p. 14)
@@ -639,7 +638,7 @@ where
     fn set_ldo_flag(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
         let sw = self.get_signal_bandwidth()?;
         // Section 4.1.1.5
-        let symbol_duration = 1000 / (sw / ((1 as i64) << self.get_spreading_factor()?));
+        let symbol_duration = 1000 / (sw / ((1_i64) << self.get_spreading_factor()?));
 
         // Section 4.1.1.6
         let ldo_on = symbol_duration > 16;
