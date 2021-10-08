@@ -145,6 +145,8 @@
 //! device-to-device basis by retrieving a packet with the `read_packet()` function.
 
 use bit_field::BitField;
+use heapless::Vec;
+
 use embedded_hal::blocking::delay::DelayMs;
 use embedded_hal::blocking::spi::{Transfer, Write};
 use embedded_hal::digital::v2::OutputPin;
@@ -202,19 +204,12 @@ pub trait EmbeddedRadio {
     /// Will return a boolean value of whether or not the radio is still transmitting.
     fn transmitting(&mut self) -> Result<bool, Self::Error>;
 
-    fn poll_irq(
-        &mut self,
-        timeout_ms: Option<i32>,
-        delay: &mut dyn DelayMs<u8>,
-    ) -> Result<usize, Self::Error>;
-
     /// Attempts to read a value on this channel. Unsuccessful reads result from a packet not being present.
     /// Successful reads would be one where up to 255 bytes of data are received.
-    fn read_packet(&mut self) -> Result<[u8; 255], Self::Error>;
-    ///// Attempts to read a value on this channel. Unsuccessful reads can result from a hardware failure or the specified timeout passing.
-    ///// Successful reads would be ones where up to 255 bytes of data are received.
-    //fn read_packet_timeout(&mut self) -> Result<[u8; 255], Self::Error>;
-
+    fn read_packet(&mut self) -> Result<Option<Vec<u8, 255>>, Self::Error>;
+    /// Attempts to read a value on this channel. Unsuccessful reads can result from a hardware failure or the specified timeout passing.
+    /// Successful reads would be ones where up to 255 bytes of data are received.
+    fn read_packet_timeout(&mut self, timeout_ms: i32, delay: &mut dyn DelayMs<u8>) -> Result<Option<Vec<u8, 255>>, Self::Error>;
 }
 
 /// Implement embedded_radio traits
@@ -257,57 +252,50 @@ where
         }
     }
 
-    /// Blocks the current thread, returning the size of a packet if one is received or an error is the
-    /// task timed out. The timeout can be supplied with None to make it poll indefinitely or
-    /// with `Some(timeout_in_milliseconds)`
-    fn poll_irq(
-        &mut self,
-        timeout_ms: Option<i32>,
-        delay: &mut dyn DelayMs<u8>,
-    ) -> Result<usize, Self::Error> {
+    /// Returns Some Vec with a capacity of 255 bytes, if a packet has arrived. If no packet has arrived, None
+    /// is returned. Errors result from hardware faults.
+    fn read_packet(&mut self) -> Result<Option<Vec<u8, 255>>, Self::Error> {
         self.set_mode(RadioMode::RxContinuous)?;
-        match timeout_ms {
-            Some(value) => {
-                let mut count = 0;
-                let packet_ready = loop {
-                    let packet_ready = self.read_register(Register::IrqFlags)?.get_bit(6);
-                    if count >= value || packet_ready {
-                        break packet_ready;
-                    }
-                    count += 1;
-                    delay.delay_ms(1);
-                };
-                if packet_ready {
-                    self.clear_irq()?;
-                    Ok(self.read_register(Register::RxNbBytes)? as usize)
-                } else {
-                    Err(Uninformative)
-                }
+        if let Ok(Some(packet_size)) = self.check_irq() {
+            // IRQ already cleared
+            let mut buffer = Vec::new();
+
+            let fifo_addr = self.read_register(Register::FifoRxCurrentAddr)?;
+            self.write_register(Register::FifoAddrPtr, fifo_addr)?;
+
+            for _ in 0..packet_size {
+                let byte = self.read_register(Register::Fifo)?;
+                // memory safety guaranteed here, packet size cannot be more than 255
+                buffer.push(byte).ok();
             }
-            None => {
-                while !self.read_register(Register::IrqFlags)?.get_bit(6) {
-                    delay.delay_ms(100);
-                }
-                self.clear_irq()?;
-                Ok(self.read_register(Register::RxNbBytes)? as usize)
-            }
+            self.write_register(Register::FifoAddrPtr, 0)?;
+
+            Ok(Some(buffer))
+        } else {
+            Ok(None)
         }
     }
 
-    /// Returns the contents of the fifo as a fixed 255 u8 array. This should only be called if there is a
-    /// new packet ready to be read.
-    fn read_packet(&mut self) -> Result<[u8; 255], Self::Error> {
-        let mut buffer = [0; 255];
-        self.clear_irq()?;
-        let size = self.read_register(Register::RxNbBytes)?;
-        let fifo_addr = self.read_register(Register::FifoRxCurrentAddr)?;
-        self.write_register(Register::FifoAddrPtr, fifo_addr)?;
-        for i in 0..size {
-            let byte = self.read_register(Register::Fifo)?;
-            buffer[i as usize] = byte;
-        }
-        self.write_register(Register::FifoAddrPtr, 0)?;
-        Ok(buffer)
+    /// Polls read_packet() for timeout (in milliseconds). Same return type.
+    fn read_packet_timeout(&mut self, timeout_ms: i32, delay: &mut dyn DelayMs<u8>) -> Result<Option<Vec<u8, 255>>, Self::Error> {
+        let mut count = 0;
+
+        let packet = loop {
+            let packet = self.read_packet()?;
+
+            if packet.is_some() {
+                break packet;
+            }
+
+            if count >= timeout_ms {
+                break None;
+            }
+
+            count += 1;
+            delay.delay_ms(1);
+        };
+
+        Ok(packet)
     }
 
     /// Returns true if the radio is currently transmitting a packet.
@@ -369,9 +357,10 @@ where
 
     /// Check the radio's IRQ registers for a new packet, and only return it's size if one has arrived.
     fn check_irq(&mut self) -> Result<Option<usize>, Error<E, CS::Error, RESET::Error>> {
-        let packet_ready = self.read_register(Register::IrqFlags)?.get_bit(6);
+        let packet_ready: bool = self.read_register(Register::IrqFlags)?.get_bit(6);
 
         if packet_ready {
+            self.clear_irq()?;
             Ok(Some(self.read_register(Register::RxNbBytes)? as usize))
         } else {
             Ok(None)
@@ -384,6 +373,43 @@ where
         self.write_register(Register::IrqFlags, irq_flags)?;
 
         Ok(())
+    }
+
+    /// Blocks the current thread, returning the size of a packet if one is received or an error is the
+    /// task timed out. The timeout can be supplied with None to make it poll indefinitely or
+    /// with `Some(timeout_in_milliseconds)`
+    fn poll_irq(
+        &mut self,
+        timeout_ms: Option<i32>,
+        delay: &mut dyn DelayMs<u8>,
+    ) -> Result<usize, Error<E, CS::Error, RESET::Error>> {
+        self.set_mode(RadioMode::RxContinuous)?;
+        match timeout_ms {
+            Some(value) => {
+                let mut count = 0;
+                let packet_ready = loop {
+                    let packet_ready = self.read_register(Register::IrqFlags)?.get_bit(6);
+                    if count >= value || packet_ready {
+                        break packet_ready;
+                    }
+                    count += 1;
+                    delay.delay_ms(1);
+                };
+                if packet_ready {
+                    self.clear_irq()?;
+                    Ok(self.read_register(Register::RxNbBytes)? as usize)
+                } else {
+                    Err(Uninformative)
+                }
+            }
+            None => {
+                while !self.read_register(Register::IrqFlags)?.get_bit(6) {
+                    delay.delay_ms(100);
+                }
+                self.clear_irq()?;
+                Ok(self.read_register(Register::RxNbBytes)? as usize)
+            }
+        }
     }
 
     pub fn set_dio0_tx_done(&mut self) -> Result<(), Error<E, CS::Error, RESET::Error>> {
@@ -444,17 +470,19 @@ where
 
     /// Sets the state of the radio. Default mode after initiation is `Standby`.
     pub fn set_mode(&mut self, mode: RadioMode) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        if self.explicit_header {
-            self.set_explicit_header_mode()?;
-        } else {
-            self.set_implicit_header_mode()?;
-        }
-        self.write_register(
-            Register::OpMode,
-            RadioMode::LongRangeMode.addr() | mode.addr(),
-        )?;
+        if mode != self.mode {
+            if self.explicit_header {
+                self.set_explicit_header_mode()?;
+            } else {
+                self.set_implicit_header_mode()?;
+            }
+            self.write_register(
+                Register::OpMode,
+                RadioMode::LongRangeMode.addr() | mode.addr(),
+            )?;
 
-        self.mode = mode;
+            self.mode = mode;
+        }
         Ok(())
     }
 
@@ -715,7 +743,7 @@ where
 }
 
 /// Modes of the radio and their corresponding register values.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum RadioMode {
     LongRangeMode = 0x80,
     Sleep = 0x00,
