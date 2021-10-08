@@ -12,7 +12,7 @@
 //! # Examples
 //! ## Raspberry Pi Basic Send
 //! Utilizes a Raspberry Pi to send a message. The example utilizes the `linux_embedded_hal` crate.
-//! ```no_run
+//! ```ignore
 //! extern crate sx127x_lora;
 //! extern crate linux_embedded_hal as hal;
 //!
@@ -66,7 +66,7 @@
 //! Utilizes a STM32F429 to receive data using the blocking `poll_irq(timeout)` function. It prints
 //! the received packet back out over semihosting. The example utilizes the `stm32f429_hal`, `cortex_m`,
 //! and `panic_semihosting` crates.
-//! ```no_run
+//! ```ignore
 //! #![no_std]
 //! #![no_main]
 //!
