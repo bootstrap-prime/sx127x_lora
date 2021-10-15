@@ -209,7 +209,7 @@ pub trait EmbeddedRadio {
     fn read_packet(&mut self) -> Result<Option<Vec<u8, 255>>, Self::Error>;
     /// Attempts to read a value on this channel. Unsuccessful reads can result from a hardware failure or the specified timeout passing.
     /// Successful reads would be ones where up to 255 bytes of data are received.
-    fn read_packet_timeout(&mut self, timeout_ms: i32, delay: &mut dyn DelayMs<u8>) -> Result<Option<Vec<u8, 255>>, Self::Error>;
+    fn read_packet_timeout<DELAY: DelayMs<u8>>(&mut self, timeout_ms: i32, delay: &mut DELAY) -> Result<Option<Vec<u8, 255>>, Self::Error>;
 }
 
 /// Implement embedded_radio traits
@@ -277,7 +277,7 @@ where
     }
 
     /// Polls read_packet() for timeout (in milliseconds). Same return type.
-    fn read_packet_timeout(&mut self, timeout_ms: i32, delay: &mut dyn DelayMs<u8>) -> Result<Option<Vec<u8, 255>>, Self::Error> {
+    fn read_packet_timeout<DELAY: DelayMs<u8>>(&mut self, timeout_ms: i32, delay: &mut DELAY) -> Result<Option<Vec<u8, 255>>, Self::Error> {
         let mut count = 0;
 
         let packet = loop {
@@ -319,12 +319,12 @@ where
 {
     /// Builds and returns a new instance of the radio. Only one instance of the radio should exist at a time.
     /// This also preforms a hardware reset of the module and then puts it in standby.
-    pub fn new(
+    pub fn new<DELAY: DelayMs<u8>>(
         spi: SPI,
         cs: CS,
         reset: RESET,
         frequency: i64,
-        delay: &mut dyn DelayMs<u8>,
+        delay: &mut DELAY,
     ) -> Result<Self, Error<E, CS::Error, RESET::Error>> {
         let mut sx127x = LoRa {
             spi,
@@ -378,10 +378,10 @@ where
     /// Blocks the current thread, returning the size of a packet if one is received or an error is the
     /// task timed out. The timeout can be supplied with None to make it poll indefinitely or
     /// with `Some(timeout_in_milliseconds)`
-    fn poll_irq(
+    fn poll_irq<DELAY: DelayMs<u8>>(
         &mut self,
         timeout_ms: Option<i32>,
-        delay: &mut dyn DelayMs<u8>,
+        delay: &mut DELAY,
     ) -> Result<usize, Error<E, CS::Error, RESET::Error>> {
         self.set_mode(RadioMode::RxContinuous)?;
         match timeout_ms {
