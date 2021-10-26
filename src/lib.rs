@@ -256,7 +256,7 @@ where
     /// is returned. Errors result from hardware faults.
     fn read_packet(&mut self) -> Result<Option<Vec<u8, 255>>, Self::Error> {
         self.set_mode(RadioMode::RxContinuous)?;
-        if let Ok(Some(packet_size)) = self.check_irq() {
+        if let Some(packet_size) = self.check_irq()? {
             // IRQ already cleared
             let mut buffer = Vec::new();
 
