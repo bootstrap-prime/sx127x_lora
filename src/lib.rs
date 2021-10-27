@@ -234,11 +234,6 @@ where
             Err(Transmitting)
         } else {
             self.set_mode(RadioMode::Stdby)?;
-            if self.explicit_header {
-                self.set_explicit_header_mode()?;
-            } else {
-                self.set_implicit_header_mode()?;
-            }
 
             self.write_register(Register::IrqFlags, 0)?;
             self.write_register(Register::FifoAddrPtr, 0)?;
