@@ -168,6 +168,7 @@ pub struct LoRa<SPI, CS, RESET> {
     reset: RESET,
     frequency: i64,
     pub explicit_header: bool,
+    // this is useless. it does not necessarily sync to the state of the radio.
     pub mode: RadioMode,
 }
 
@@ -190,27 +191,7 @@ const VERSION_CHECK: u8 = 0x12;
 #[cfg(feature = "version_0x09")]
 const VERSION_CHECK: u8 = 0x09;
 
-/// embedded_radio traits, to provide implementations of various radio drivers compatible with embedded_hal.
-/// This mirrors the design of the std::sync::mpsc APIs, and can create mock implementations to support unit testing.
-/// This trait does not cover configuration, because of lack of knowledge on the designer's part. PRs welcome if
-/// a device agnostic way can be found to do that.
-pub trait EmbeddedRadio {
-    type Error;
-
-    /// Attempts to send a value on this channel. Unsuccessful sends can result from hardware errors.
-    fn transmit_payload(&mut self, payload: &[u8]) -> Result<(), Self::Error>;
-    /// Blocks until the payload has been sent from the transmitter. Unsuccessful sends can result from hardware errors.
-    fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error>;
-    /// Will return a boolean value of whether or not the radio is still transmitting.
-    fn transmitting(&mut self) -> Result<bool, Self::Error>;
-
-    /// Attempts to read a value on this channel. Unsuccessful reads result from a packet not being present.
-    /// Successful reads would be one where up to 255 bytes of data are received.
-    fn read_packet(&mut self) -> Result<Option<Vec<u8, 255>>, Self::Error>;
-    /// Attempts to read a value on this channel. Unsuccessful reads can result from a hardware failure or the specified timeout passing.
-    /// Successful reads would be ones where up to 255 bytes of data are received.
-    fn read_packet_timeout<DELAY: DelayMs<u8>>(&mut self, timeout_ms: i32, delay: &mut DELAY) -> Result<Option<Vec<u8, 255>>, Self::Error>;
-}
+use embedded_radio::EmbeddedRadio;
 
 /// Implement embedded_radio traits
 impl<SPI, CS, RESET, E> EmbeddedRadio for LoRa<SPI, CS, RESET>
@@ -261,7 +242,7 @@ where
             for _ in 0..packet_size {
                 let byte = self.read_register(Register::Fifo)?;
                 // memory safety guaranteed here, packet size cannot be more than 255
-                buffer.push(byte).ok();
+                buffer.push(byte).unwrap();
             }
             self.write_register(Register::FifoAddrPtr, 0)?;
 
@@ -465,7 +446,7 @@ where
 
     /// Sets the state of the radio. Default mode after initiation is `Standby`.
     pub fn set_mode(&mut self, mode: RadioMode) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        if mode != self.mode {
+        // if mode != self.mode {
             if self.explicit_header {
                 self.set_explicit_header_mode()?;
             } else {
@@ -477,7 +458,7 @@ where
             )?;
 
             self.mode = mode;
-        }
+        // }
         Ok(())
     }
 
