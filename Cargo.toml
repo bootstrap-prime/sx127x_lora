@@ -1,7 +1,7 @@
 [package]
-name = "sx127x_lora"
-version = "0.4.0"
-authors = ["Charles Wade <charles.wade@rockets.utoledo.edu>"]
+name = "embedded_radio"
+version = "1.0.0"
+authors = ["Charles Wade <charles.wade@rockets.utoledo.edu>", "bootstrap-prime <bootstrap.prime@gmail.com>"]
 repository = "https://github.com/mr-glt/sx127x_lora"
 readme = "README.md"
 edition = "2021"
@@ -25,5 +25,7 @@ bit_field = "~0.10"
 heapless = "0.7.7"
 
 [features]
+default = [ "sx127x_lora" ]
 version_0x09 = []
-default = []
+sx127x_lora = []
+mock = []
