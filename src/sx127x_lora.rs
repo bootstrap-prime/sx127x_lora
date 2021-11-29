@@ -8,8 +8,8 @@ use embedded_hal::spi::Mode;
 
 mod register;
 use register::AsAddr;
-use register::{IRQMask, PaConfig, Register};
 use register::{FskDataModulationShaping, FskRampUpRamDown};
+use register::{IRQMask, PaConfig, Register};
 
 /// Provides the necessary SPI mode configuration for the radio
 /// Note that this may vary by device. Modules other than the RFM95
@@ -106,7 +106,11 @@ where
     }
 
     /// Polls read_packet() for timeout (in milliseconds). Same return type.
-    fn read_packet_timeout<DELAY: DelayMs<u8>>(&mut self, timeout_ms: i32, delay: &mut DELAY) -> Result<Option<Vec<u8, 255>>, Self::Error> {
+    fn read_packet_timeout<DELAY: DelayMs<u8>>(
+        &mut self,
+        timeout_ms: i32,
+        delay: &mut DELAY,
+    ) -> Result<Option<Vec<u8, 255>>, Self::Error> {
         let mut count = 0;
 
         let packet = loop {
