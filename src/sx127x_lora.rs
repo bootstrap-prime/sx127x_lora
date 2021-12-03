@@ -188,6 +188,11 @@ where
         }
     }
 
+    /// Return ownership of lora driver component elements.
+    pub fn decompose(self) -> (SPI, CS, RESET) {
+        (self.spi, self.cs, self.reset)
+    }
+
     /// Check the radio's IRQ registers for a new packet, and only return it's size if one has arrived.
     fn check_irq(&mut self) -> Result<Option<usize>, Error<E, CS::Error, RESET::Error>> {
         let packet_ready: bool = self.read_register(Register::IrqFlags)?.get_bit(6);
