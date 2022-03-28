@@ -308,19 +308,17 @@ where
 
     /// Sets the state of the radio. Default mode after initiation is `Standby`.
     pub fn set_mode(&mut self, mode: RadioMode) -> Result<(), Error<E, CS::Error, RESET::Error>> {
-        if mode != self.mode {
-            if self.explicit_header {
-                self.set_explicit_header_mode()?;
-            } else {
-                self.set_implicit_header_mode()?;
-            }
-            self.write_register(
-                Register::OpMode,
-                RadioMode::LongRangeMode.addr() | mode.addr(),
-            )?;
-
-            self.mode = mode;
+        if self.explicit_header {
+            self.set_explicit_header_mode()?;
+        } else {
+            self.set_implicit_header_mode()?;
         }
+        self.write_register(
+            Register::OpMode,
+            RadioMode::LongRangeMode.addr() | mode.addr(),
+        )?;
+
+        self.mode = mode;
         Ok(())
     }
 
