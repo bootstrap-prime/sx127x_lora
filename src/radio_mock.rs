@@ -83,7 +83,7 @@ impl EmbeddedRadio for MockLora {
         }
     }
 
-    fn read_packet_timeout<DELAY: DelayMs<u8>>(
+    fn read_packet_timeout<DELAY: DelayMs<u16>>(
         &mut self,
         timeout_ms: i32,
         delay: &mut DELAY,

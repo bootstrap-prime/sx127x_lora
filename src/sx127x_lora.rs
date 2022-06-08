@@ -106,7 +106,7 @@ where
     }
 
     /// Polls read_packet() for timeout (in milliseconds). Same return type.
-    fn read_packet_timeout<DELAY: DelayMs<u8>>(
+    fn read_packet_timeout<DELAY: DelayMs<u16>>(
         &mut self,
         timeout_ms: i32,
         delay: &mut DELAY,
@@ -152,7 +152,7 @@ where
 {
     /// Builds and returns a new instance of the radio. Only one instance of the radio should exist at a time.
     /// This also preforms a hardware reset of the module and then puts it in standby.
-    pub fn new<DELAY: DelayMs<u8>>(
+    pub fn new<DELAY: DelayMs<u16>>(
         spi: SPI,
         cs: CS,
         reset: RESET,
