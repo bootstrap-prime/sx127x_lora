@@ -579,7 +579,7 @@ where
 }
 
 /// Modes of the radio and their corresponding register values.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 pub enum RadioMode {
     LongRangeMode = 0x80,
     Sleep = 0x00,

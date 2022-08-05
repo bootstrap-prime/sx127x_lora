@@ -55,15 +55,14 @@ impl EmbeddedRadio for MockLora {
         }
 
         for tx in self.tx.iter() {
-            tx.send(buffer.clone())
-                .map_err(|e| Self::Error::Transmitter(e))?;
+            tx.send(buffer.clone()).map_err(Self::Error::Transmitter)?;
         }
 
         Ok(())
     }
 
     fn transmit_payload_busy(&mut self, payload: &[u8]) -> Result<(), Self::Error> {
-        self.transmit_payload(&payload)?;
+        self.transmit_payload(payload)?;
         while self.transmitting()? {}
         Ok(())
     }
